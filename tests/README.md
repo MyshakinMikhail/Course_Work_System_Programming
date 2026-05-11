@@ -9,7 +9,10 @@
 Из корня проекта:
 
 ```bash
-cmake --preset mingw
-cmake --build --preset mingw
-ctest --preset mingw --output-on-failure
+для windows: cmake -S . -B build -G "MinGW Makefiles" 
+для linux: cmake -S . -B build 
+
+cmake --build build
+cd build
+ctest --output-on-failure
 ```
