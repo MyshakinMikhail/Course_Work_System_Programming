@@ -1,10 +1,37 @@
 #include <cassert>
+#include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "Field.h"
 #include "Record.h"
+#include "Table.h"
 #include "TableSchema.h"
+
+namespace {
+
+class MockTable final : public Table {
+public:
+    void insert(const Record& record) override {
+        insertedRecords.push_back(record);
+    }
+
+    std::vector<Record> scan() override {
+        return insertedRecords;
+    }
+
+    std::optional<Record> findByIndex(int key) override {
+        if (key < 0 || static_cast<std::size_t>(key) >= insertedRecords.size()) {
+            return std::nullopt;
+        }
+        return insertedRecords[static_cast<std::size_t>(key)];
+    }
+
+    std::vector<Record> insertedRecords;
+};
+
+}
 
 static void testField() {
     const Field defaultField;
@@ -84,9 +111,37 @@ static void testTableSchema() {
     assert(!notesColumn.indexed);
 }
 
+static void testTableContract() {
+    static_assert(std::is_abstract_v<Table>, "Table must stay an interface");
+
+    MockTable table;
+    const Record first{Field::Int(1), Field::String("one")};
+    const Record second{Field::Int(2), Field::String("two")};
+
+    table.insert(first);
+    table.insert(second);
+
+    assert(table.insertedRecords.size() == 2);
+    assert(table.insertedRecords[0].fields[0].intValue == 1);
+    assert(table.insertedRecords[1].fields[1].stringValue == "two");
+
+    const std::vector<Record> snapshot = table.scan();
+    assert(snapshot.size() == 2);
+    assert(snapshot[0].fields[0].intValue == 1);
+    assert(snapshot[1].fields[0].intValue == 2);
+
+    const std::optional<Record> found = table.findByIndex(1);
+    assert(found.has_value());
+    assert(found->fields[0].intValue == 2);
+
+    const std::optional<Record> missing = table.findByIndex(5);
+    assert(!missing.has_value());
+}
+
 int main() {
     testField();
     testRecord();
     testTableSchema();
+    testTableContract();
     return 0;
 }
