@@ -1,8 +1,24 @@
 #include <cassert>
 #include <filesystem>
 #include <string>
+#include <stdexcept>
 
 #include "FileManager.h"
+
+namespace {
+
+template <typename Fn>
+void expectRuntimeError(Fn&& fn) {
+    bool thrown = false;
+    try {
+        fn();
+    } catch (const std::runtime_error&) {
+        thrown = true;
+    }
+    assert(thrown);
+}
+
+}
 
 static void testFileManagerRoundTrip() {
     const auto tempFile = std::filesystem::temp_directory_path() / "course_work_storage_test.bin";
@@ -62,7 +78,36 @@ static void testFileManagerRoundTrip() {
     std::filesystem::remove(tempFile);
 }
 
+static void testFileManagerValidation() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_storage_validation_test.bin";
+    std::filesystem::remove(tempFile);
+
+    const TableSchema schema{
+        Column::Integer("id"),
+        Column::Text("name")
+    };
+
+    {
+        FileManager manager(tempFile);
+        manager.writeSchema(schema);
+        expectRuntimeError([&]() {
+            manager.writeRecord(Record{Field::Int(1)});
+        });
+    }
+
+    {
+        FileManager manager(tempFile);
+        manager.readSchema();
+        expectRuntimeError([&]() {
+            (void)manager.readRecord(std::streampos(0));
+        });
+    }
+
+    std::filesystem::remove(tempFile);
+}
+
 int main() {
     testFileManagerRoundTrip();
+    testFileManagerValidation();
     return 0;
 }
