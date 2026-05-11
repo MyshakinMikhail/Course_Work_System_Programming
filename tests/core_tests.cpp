@@ -1,5 +1,7 @@
 #include <cassert>
+#include <filesystem>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -10,6 +12,17 @@
 #include "TableSchema.h"
 
 namespace {
+
+template <typename Fn>
+void expectRuntimeError(Fn&& fn) {
+    bool thrown = false;
+    try {
+        fn();
+    } catch (const std::runtime_error&) {
+        thrown = true;
+    }
+    assert(thrown);
+}
 
 class MockTable final : public Table {
 public:
@@ -112,7 +125,7 @@ static void testTableSchema() {
 }
 
 static void testTableContract() {
-    static_assert(std::is_abstract_v<Table>, "Table must stay an interface");
+    static_assert(!std::is_abstract_v<Table>, "Table must be concrete");
 
     MockTable table;
     const Record first{Field::Int(1), Field::String("one")};
@@ -138,10 +151,52 @@ static void testTableContract() {
     assert(!missing.has_value());
 }
 
+static void testTableStorageIntegration() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_test.bin";
+    std::filesystem::remove(tempFile);
+
+    Table table(tempFile, TableSchema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    });
+
+    table.insert(Record{Field::Int(11), Field::String("alpha")});
+    table.insert(Record{Field::Int(22), Field::String("beta")});
+
+    const std::vector<Record> snapshot = table.scan();
+    assert(snapshot.size() == 2);
+    assert(snapshot[0].fields[0].intValue == 11);
+    assert(snapshot[1].fields[1].stringValue == "beta");
+
+    const std::optional<Record> found = table.findByIndex(1);
+    assert(found.has_value());
+    assert(found->fields[0].intValue == 22);
+
+    std::filesystem::remove(tempFile);
+}
+
+static void testTableRequiresInitialization() {
+    Table table;
+
+    expectRuntimeError([&]() {
+        table.insert(Record{Field::Int(1)});
+    });
+
+    expectRuntimeError([&]() {
+        (void)table.scan();
+    });
+
+    expectRuntimeError([&]() {
+        (void)table.findByIndex(0);
+    });
+}
+
 int main() {
     testField();
     testRecord();
     testTableSchema();
     testTableContract();
+    testTableRequiresInitialization();
+    testTableStorageIntegration();
     return 0;
 }
