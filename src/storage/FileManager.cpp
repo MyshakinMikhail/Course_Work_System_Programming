@@ -5,6 +5,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -64,6 +65,27 @@ FieldType readFieldType(std::istream& stream) {
 void writeFieldType(std::ostream& stream, FieldType type) {
     const auto rawType = static_cast<std::int32_t>(type);
     writeBinary(stream, rawType);
+}
+
+Record readRecordPayload(std::istream& stream, const TableSchema& schema) {
+    const auto fieldCount = readBinary<std::uint64_t>(stream);
+    if (fieldCount != schema.columns.size()) {
+        throw std::runtime_error("Stored record does not match schema");
+    }
+
+    Record record;
+    record.fields.reserve(static_cast<std::size_t>(fieldCount));
+    for (std::uint64_t i = 0; i < fieldCount; ++i) {
+        const Column& column = schema.columns[static_cast<std::size_t>(i)];
+        if (column.type == FieldType::INT) {
+            const auto value = readBinary<std::int32_t>(stream);
+            record.fields.emplace_back(Field::Int(static_cast<int>(value)));
+        } else {
+            record.fields.emplace_back(Field::String(readString(stream)));
+        }
+    }
+
+    return record;
 }
 
 }
@@ -161,7 +183,6 @@ std::streampos FileManager::writeRecord(const Record& record) {
             throw std::runtime_error("Record field type does not match schema");
         }
 
-        writeFieldType(stream, field.type);
         if (field.isInt()) {
             const std::int32_t value = static_cast<std::int32_t>(field.intValue);
             writeBinary(stream, value);
@@ -195,28 +216,34 @@ Record FileManager::readRecord(std::streampos offset) {
         throw std::runtime_error("Failed to seek to record offset");
     }
 
-    const auto fieldCount = readBinary<std::uint64_t>(stream);
     const auto& schema = *schema_;
-    if (fieldCount != schema.columns.size()) {
-        throw std::runtime_error("Stored record does not match schema");
+    return readRecordPayload(stream, schema);
+}
+
+std::vector<Record> FileManager::readAllRecords() {
+    ensureSchemaLoaded();
+
+    std::ifstream stream(filePath_, std::ios::binary);
+    if (!stream.is_open()) {
+        throw std::runtime_error("Failed to open file for record scan");
     }
 
-    Record record;
-    record.fields.reserve(static_cast<std::size_t>(fieldCount));
-    for (std::uint64_t i = 0; i < fieldCount; ++i) {
-        const auto storedType = readFieldType(stream);
-        const auto& column = schema.columns[static_cast<std::size_t>(i)];
-        if (storedType != column.type) {
-            throw std::runtime_error("Stored record field type does not match schema");
-        }
-
-        if (storedType == FieldType::INT) {
-            const auto value = readBinary<std::int32_t>(stream);
-            record.fields.emplace_back(Field::Int(static_cast<int>(value)));
-        } else {
-            record.fields.emplace_back(Field::String(readString(stream)));
-        }
+    stream.seekg(0, std::ios::end);
+    const std::streampos fileEnd = stream.tellg();
+    if (fileEnd == std::streampos(-1)) {
+        throw std::runtime_error("Failed to determine file size");
     }
 
-    return record;
+    std::vector<Record> records;
+    stream.seekg(dataStart_);
+    if (!stream) {
+        throw std::runtime_error("Failed to seek to data section");
+    }
+
+    const auto& schema = *schema_;
+    while (stream.tellg() < fileEnd) {
+        records.push_back(readRecordPayload(stream, schema));
+    }
+
+    return records;
 }

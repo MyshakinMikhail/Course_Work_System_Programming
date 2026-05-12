@@ -73,6 +73,11 @@ static void testFileManagerRoundTrip() {
         assert(loadedSecond.fields[0].intValue == 2);
         assert(loadedSecond.fields[1].stringValue == "bob");
         assert(loadedSecond.fields[2].stringValue == "second");
+
+        const std::vector<Record> allRecords = reader.readAllRecords();
+        assert(allRecords.size() == 2);
+        assert(allRecords[0].fields[0].intValue == 1);
+        assert(allRecords[1].fields[2].stringValue == "second");
     }
 
     std::filesystem::remove(tempFile);

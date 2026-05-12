@@ -1,5 +1,6 @@
 #include <cassert>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include "Field.h"
+#include "Index.h"
 #include "Record.h"
 #include "Table.h"
 #include "TableSchema.h"
@@ -42,6 +44,24 @@ public:
     }
 
     std::vector<Record> insertedRecords;
+};
+
+class MockIndex final : public Index {
+public:
+    void insert(int key, int offset) override {
+        offsetsByKey[key] = offset;
+    }
+
+    std::optional<int> find(int key) override {
+        const auto it = offsetsByKey.find(key);
+        if (it == offsetsByKey.end()) {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+    std::map<int, int> offsetsByKey;
 };
 
 }
@@ -168,9 +188,90 @@ static void testTableStorageIntegration() {
     assert(snapshot[0].fields[0].intValue == 11);
     assert(snapshot[1].fields[1].stringValue == "beta");
 
-    const std::optional<Record> found = table.findByIndex(1);
+    const std::optional<Record> found = table.findByIndex(22);
     assert(found.has_value());
     assert(found->fields[0].intValue == 22);
+
+    std::filesystem::remove(tempFile);
+}
+
+static void testTableUsesIndexWhenAvailable() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_index_test.bin";
+    std::filesystem::remove(tempFile);
+
+    Table table(tempFile, TableSchema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    });
+
+    MockIndex index;
+    table.index = &index;
+
+    table.insert(Record{Field::Int(101), Field::String("gamma")});
+    table.insert(Record{Field::Int(202), Field::String("delta")});
+
+    assert(index.offsetsByKey.size() == 2);
+    assert(index.offsetsByKey.find(101) != index.offsetsByKey.end());
+    assert(index.offsetsByKey.find(202) != index.offsetsByKey.end());
+
+    const std::optional<Record> found = table.findByIndex(202);
+    assert(found.has_value());
+    assert(found->fields[1].stringValue == "delta");
+
+    const std::optional<Record> missing = table.findByIndex(303);
+    assert(!missing.has_value());
+
+    std::filesystem::remove(tempFile);
+}
+
+static void testTableReopensExistingData() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_reopen_test.bin";
+    std::filesystem::remove(tempFile);
+
+    const TableSchema schema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    };
+
+    {
+        Table table(tempFile, schema);
+        table.insert(Record{Field::Int(7), Field::String("first")});
+        table.insert(Record{Field::Int(8), Field::String("second")});
+    }
+
+    {
+        Table reopened(tempFile, schema);
+        const std::vector<Record> snapshot = reopened.scan();
+        assert(snapshot.size() == 2);
+        assert(snapshot[0].fields[0].intValue == 7);
+        assert(snapshot[1].fields[1].stringValue == "second");
+
+        const std::optional<Record> found = reopened.findByIndex(8);
+        assert(found.has_value());
+        assert(found->fields[1].stringValue == "second");
+    }
+
+    std::filesystem::remove(tempFile);
+}
+
+static void testTableRejectsMismatchedExistingSchema() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_schema_mismatch_test.bin";
+    std::filesystem::remove(tempFile);
+
+    {
+        Table table(tempFile, TableSchema{
+            Column::Integer("id", true),
+            Column::Text("name")
+        });
+        table.insert(Record{Field::Int(1), Field::String("alpha")});
+    }
+
+    expectRuntimeError([&]() {
+        Table mismatched(tempFile, TableSchema{
+            Column::Integer("id", true),
+            Column::Text("title")
+        });
+    });
 
     std::filesystem::remove(tempFile);
 }
@@ -198,5 +299,8 @@ int main() {
     testTableContract();
     testTableRequiresInitialization();
     testTableStorageIntegration();
+    testTableUsesIndexWhenAvailable();
+    testTableReopensExistingData();
+    testTableRejectsMismatchedExistingSchema();
     return 0;
 }
