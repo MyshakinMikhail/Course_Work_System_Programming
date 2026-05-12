@@ -9,6 +9,26 @@
 
 namespace {
 
+void validateFieldType(FieldType type, const char* context) {
+    switch (type) {
+    case FieldType::INT:
+    case FieldType::STRING:
+        return;
+    default:
+        throw std::runtime_error(std::string(context) + ": unsupported field type");
+    }
+}
+
+void validateSchema(const TableSchema& schema) {
+    for (const Column& column : schema.columns) {
+        if (column.name.empty()) {
+            throw std::runtime_error("Table schema contains column with empty name");
+        }
+
+        validateFieldType(column.type, "Table schema");
+    }
+}
+
 template <typename T>
 void writeBinary(std::ostream& stream, const T& value) {
     stream.write(reinterpret_cast<const char*>(&value), static_cast<std::streamsize>(sizeof(T)));
@@ -94,6 +114,12 @@ FileManager::FileManager(std::filesystem::path filePath)
     : filePath_(std::move(filePath)) {}
 
 void FileManager::writeSchema(const TableSchema& schema) {
+    validateSchema(schema);
+
+    if (std::filesystem::exists(filePath_) && !std::filesystem::is_regular_file(filePath_)) {
+        throw std::runtime_error("Table path exists but is not a regular file");
+    }
+
     std::ofstream stream(filePath_, std::ios::binary | std::ios::trunc);
     if (!stream.is_open()) {
         throw std::runtime_error("Failed to open file for schema writing");
@@ -118,6 +144,14 @@ void FileManager::writeSchema(const TableSchema& schema) {
 }
 
 TableSchema FileManager::readSchema() {
+    if (!std::filesystem::exists(filePath_)) {
+        throw std::runtime_error("Table file does not exist");
+    }
+
+    if (!std::filesystem::is_regular_file(filePath_)) {
+        throw std::runtime_error("Table path is not a regular file");
+    }
+
     std::ifstream stream(filePath_, std::ios::binary);
     if (!stream.is_open()) {
         throw std::runtime_error("Failed to open file for schema reading");
@@ -134,6 +168,8 @@ TableSchema FileManager::readSchema() {
         column.indexed = indexed != 0;
         schema.columns.push_back(std::move(column));
     }
+
+    validateSchema(schema);
 
     dataStart_ = stream.tellg();
     schema_ = schema;
@@ -179,6 +215,7 @@ std::streampos FileManager::writeRecord(const Record& record) {
         const auto& field = record.fields[i];
         const auto& column = schema.columns[i];
 
+        validateFieldType(field.type, "Record");
         if (field.type != column.type) {
             throw std::runtime_error("Record field type does not match schema");
         }

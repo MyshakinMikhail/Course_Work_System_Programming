@@ -224,6 +224,27 @@ static void testTableUsesIndexWhenAvailable() {
     std::filesystem::remove(tempFile);
 }
 
+static void testTableParserIntegrationApi() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_parser_api_test.bin";
+    std::filesystem::remove(tempFile);
+
+    Table table(tempFile, TableSchema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    });
+
+    const Record parsedRecord{Field::Int(55), Field::String("parser")};
+    table.insertFromParser(parsedRecord);
+
+    const std::optional<Record> selected = table.selectByKey(55);
+    assert(selected.has_value());
+    assert(selected->fields.size() == 2);
+    assert(selected->fields[0].intValue == 55);
+    assert(selected->fields[1].stringValue == "parser");
+
+    std::filesystem::remove(tempFile);
+}
+
 static void testTableReopensExistingData() {
     const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_reopen_test.bin";
     std::filesystem::remove(tempFile);
@@ -276,6 +297,29 @@ static void testTableRejectsMismatchedExistingSchema() {
     std::filesystem::remove(tempFile);
 }
 
+static void testTableRejectsEmptyColumnName() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_empty_column_test.bin";
+    std::filesystem::remove(tempFile);
+
+    expectRuntimeError([&]() {
+        Table invalid(tempFile, TableSchema{
+            Column::Integer("", true),
+            Column::Text("name")
+        });
+    });
+}
+
+static void testTableRejectsUnsupportedColumnType() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_invalid_type_test.bin";
+    std::filesystem::remove(tempFile);
+
+    expectRuntimeError([&]() {
+        Table invalid(tempFile, TableSchema{
+            Column("id", static_cast<FieldType>(99), true)
+        });
+    });
+}
+
 static void testTableRequiresInitialization() {
     Table table;
 
@@ -300,7 +344,10 @@ int main() {
     testTableRequiresInitialization();
     testTableStorageIntegration();
     testTableUsesIndexWhenAvailable();
+    testTableParserIntegrationApi();
     testTableReopensExistingData();
     testTableRejectsMismatchedExistingSchema();
+    testTableRejectsEmptyColumnName();
+    testTableRejectsUnsupportedColumnType();
     return 0;
 }

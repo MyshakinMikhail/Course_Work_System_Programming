@@ -111,8 +111,44 @@ static void testFileManagerValidation() {
     std::filesystem::remove(tempFile);
 }
 
+static void testFileManagerRejectsInvalidSchema() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_storage_invalid_schema_test.bin";
+    std::filesystem::remove(tempFile);
+
+    {
+        FileManager manager(tempFile);
+        expectRuntimeError([&]() {
+            manager.writeSchema(TableSchema{
+                Column::Integer("", true),
+                Column::Text("name")
+            });
+        });
+    }
+
+    {
+        FileManager manager(tempFile);
+        expectRuntimeError([&]() {
+            manager.writeSchema(TableSchema{
+                Column("id", static_cast<FieldType>(99), true)
+            });
+        });
+    }
+}
+
+static void testFileManagerRejectsMissingTableFile() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_storage_missing_file_test.bin";
+    std::filesystem::remove(tempFile);
+
+    FileManager manager(tempFile);
+    expectRuntimeError([&]() {
+        (void)manager.readSchema();
+    });
+}
+
 int main() {
     testFileManagerRoundTrip();
     testFileManagerValidation();
+    testFileManagerRejectsInvalidSchema();
+    testFileManagerRejectsMissingTableFile();
     return 0;
 }
