@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Field.h"
+#include "Index.h"
 #include "Record.h"
 #include "TableSchema.h"
 
@@ -12,6 +13,8 @@ class FileManager;
 
 class Table {
 public:
+    Index* index = nullptr;
+
     Table() = default;
     explicit Table(std::filesystem::path filePath, const TableSchema& schema);
     virtual ~Table();
