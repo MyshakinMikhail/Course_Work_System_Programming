@@ -9,6 +9,26 @@
 
 namespace {
 
+void validateFieldType(FieldType type, const char* context) {
+    switch (type) {
+    case FieldType::INT:
+    case FieldType::STRING:
+        return;
+    default:
+        throw std::runtime_error(std::string(context) + ": unsupported field type");
+    }
+}
+
+void validateSchema(const TableSchema& schema) {
+    for (const Column& column : schema.columns) {
+        if (column.name.empty()) {
+            throw std::runtime_error("Table schema contains column with empty name");
+        }
+
+        validateFieldType(column.type, "Table schema");
+    }
+}
+
 std::optional<std::size_t> findIndexedColumnPosition(const TableSchema& schema) {
     for (std::size_t i = 0; i < schema.columns.size(); ++i) {
         if (schema.columns[i].indexed) {
@@ -66,7 +86,13 @@ Table::~Table() {
 }
 
 void Table::initialize(std::filesystem::path filePath, const TableSchema& schema) {
+    validateSchema(schema);
+
     const bool fileExists = std::filesystem::exists(filePath);
+    if (fileExists && !std::filesystem::is_regular_file(filePath)) {
+        throw std::runtime_error("Table path exists but is not a regular file");
+    }
+
     const bool fileHasData = fileExists && std::filesystem::is_regular_file(filePath) &&
         std::filesystem::file_size(filePath) > 0;
     std::unique_ptr<FileManager> newManager = std::make_unique<FileManager>(std::move(filePath));
@@ -103,6 +129,10 @@ void Table::insert(const Record& record) {
             index->insert(*key, static_cast<int>(offset));
         }
     }
+}
+
+void Table::insertFromParser(const Record& record) {
+    insert(record);
 }
 
 std::vector<Record> Table::scan() {
@@ -144,4 +174,8 @@ std::optional<Record> Table::findByIndex(int key) {
     }
 
     return std::nullopt;
+}
+
+std::optional<Record> Table::selectByKey(int key) {
+    return findByIndex(key);
 }
