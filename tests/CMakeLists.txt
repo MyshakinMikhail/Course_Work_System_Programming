@@ -13,3 +13,5 @@ add_executable(storage_tests
 target_link_libraries(storage_tests PRIVATE core storage)
 
 add_test(NAME storage_tests COMMAND storage_tests)
+
+add_subdirectory(core_storage_tests)
