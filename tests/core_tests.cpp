@@ -224,6 +224,58 @@ static void testTableUsesIndexWhenAvailable() {
     std::filesystem::remove(tempFile);
 }
 
+static void testTableReopensExistingData() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_reopen_test.bin";
+    std::filesystem::remove(tempFile);
+
+    const TableSchema schema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    };
+
+    {
+        Table table(tempFile, schema);
+        table.insert(Record{Field::Int(7), Field::String("first")});
+        table.insert(Record{Field::Int(8), Field::String("second")});
+    }
+
+    {
+        Table reopened(tempFile, schema);
+        const std::vector<Record> snapshot = reopened.scan();
+        assert(snapshot.size() == 2);
+        assert(snapshot[0].fields[0].intValue == 7);
+        assert(snapshot[1].fields[1].stringValue == "second");
+
+        const std::optional<Record> found = reopened.findByIndex(8);
+        assert(found.has_value());
+        assert(found->fields[1].stringValue == "second");
+    }
+
+    std::filesystem::remove(tempFile);
+}
+
+static void testTableRejectsMismatchedExistingSchema() {
+    const auto tempFile = std::filesystem::temp_directory_path() / "course_work_table_schema_mismatch_test.bin";
+    std::filesystem::remove(tempFile);
+
+    {
+        Table table(tempFile, TableSchema{
+            Column::Integer("id", true),
+            Column::Text("name")
+        });
+        table.insert(Record{Field::Int(1), Field::String("alpha")});
+    }
+
+    expectRuntimeError([&]() {
+        Table mismatched(tempFile, TableSchema{
+            Column::Integer("id", true),
+            Column::Text("title")
+        });
+    });
+
+    std::filesystem::remove(tempFile);
+}
+
 static void testTableRequiresInitialization() {
     Table table;
 
@@ -248,5 +300,7 @@ int main() {
     testTableRequiresInitialization();
     testTableStorageIntegration();
     testTableUsesIndexWhenAvailable();
+    testTableReopensExistingData();
+    testTableRejectsMismatchedExistingSchema();
     return 0;
 }

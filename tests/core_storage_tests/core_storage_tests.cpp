@@ -121,9 +121,36 @@ static void testScanReadsAllInsertedRecords() {
     std::filesystem::remove(tempFile);
 }
 
+static void testReopenKeepsStoredRecords() {
+    const auto tempFile = makeTempFilePath("course_work_core_storage_reopen_test.bin");
+    std::filesystem::remove(tempFile);
+
+    const TableSchema schema{
+        Column::Integer("id", true),
+        Column::Text("name")
+    };
+
+    {
+        Table table(tempFile, schema);
+        table.insert(Record{Field::Int(11), Field::String("alpha")});
+        table.insert(Record{Field::Int(22), Field::String("beta")});
+    }
+
+    {
+        Table reopened(tempFile, schema);
+        const std::vector<Record> records = reopened.scan();
+        assert(records.size() == 2);
+        assert(records[0].fields[0].intValue == 11);
+        assert(records[1].fields[1].stringValue == "beta");
+    }
+
+    std::filesystem::remove(tempFile);
+}
+
 int main() {
     testTableCreationWritesSchema();
     testInsertPassesGrowingOffsetsToIndex();
     testScanReadsAllInsertedRecords();
+    testReopenKeepsStoredRecords();
     return 0;
 }

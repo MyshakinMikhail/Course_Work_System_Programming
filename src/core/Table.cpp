@@ -37,6 +37,24 @@ std::optional<int> extractIndexedKey(const TableSchema& schema, const Record& re
     return field.intValue;
 }
 
+bool schemasEqual(const TableSchema& lhs, const TableSchema& rhs) {
+    if (lhs.columns.size() != rhs.columns.size()) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < lhs.columns.size(); ++i) {
+        const Column& leftColumn = lhs.columns[i];
+        const Column& rightColumn = rhs.columns[i];
+        if (leftColumn.name != rightColumn.name ||
+            leftColumn.type != rightColumn.type ||
+            leftColumn.indexed != rightColumn.indexed) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 }
 
 Table::Table(std::filesystem::path filePath, const TableSchema& schema) {
@@ -48,12 +66,24 @@ Table::~Table() {
 }
 
 void Table::initialize(std::filesystem::path filePath, const TableSchema& schema) {
-    schema_ = schema;
+    const bool fileExists = std::filesystem::exists(filePath);
+    const bool fileHasData = fileExists && std::filesystem::is_regular_file(filePath) &&
+        std::filesystem::file_size(filePath) > 0;
     std::unique_ptr<FileManager> newManager = std::make_unique<FileManager>(std::move(filePath));
-    newManager->writeSchema(schema_);
+
+    if (fileHasData) {
+        const TableSchema storedSchema = newManager->readSchema();
+        if (!schemasEqual(storedSchema, schema)) {
+            throw std::runtime_error("Existing table schema does not match requested schema");
+        }
+        schema_ = storedSchema;
+    } else {
+        schema_ = schema;
+        newManager->writeSchema(schema_);
+    }
+
     delete fileManager_;
     fileManager_ = newManager.release();
-    recordOffsets_.clear();
 }
 
 bool Table::isConfigured() const {
@@ -66,7 +96,6 @@ void Table::insert(const Record& record) {
     }
 
     const std::streampos offset = fileManager_->writeRecord(record);
-    recordOffsets_.push_back(offset);
 
     if (index != nullptr) {
         const std::optional<int> key = extractIndexedKey(schema_, record);
@@ -81,12 +110,7 @@ std::vector<Record> Table::scan() {
         throw std::runtime_error("Table storage is not configured");
     }
 
-    std::vector<Record> records;
-    records.reserve(recordOffsets_.size());
-    for (const auto offset : recordOffsets_) {
-        records.push_back(fileManager_->readRecord(offset));
-    }
-    return records;
+    return fileManager_->readAllRecords();
 }
 
 std::optional<Record> Table::findByIndex(int key) {

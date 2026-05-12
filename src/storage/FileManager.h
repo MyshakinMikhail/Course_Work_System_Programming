@@ -16,6 +16,7 @@ public:
 
     std::streampos writeRecord(const Record& record);
     Record readRecord(std::streampos offset);
+    std::vector<Record> readAllRecords();
 
 private:
     std::filesystem::path filePath_;

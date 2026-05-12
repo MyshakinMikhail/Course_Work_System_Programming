@@ -36,5 +36,4 @@ protected:
 private:
     FileManager* fileManager_{nullptr};
     TableSchema schema_;
-    std::vector<std::streampos> recordOffsets_;
 };
