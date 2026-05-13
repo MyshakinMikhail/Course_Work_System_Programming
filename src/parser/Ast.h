@@ -85,13 +85,40 @@ struct ComparisonCondition {
     Operand right;
 };
 
-using Condition = std::variant<ComparisonCondition>;
+struct BetweenCondition {
+    Operand value;
+    Operand lowerBound;
+    Operand upperBound;
+};
+
+struct LikeCondition {
+    Operand value;
+    Operand pattern;
+};
+
+using Condition = std::variant<ComparisonCondition, BetweenCondition, LikeCondition>;
 
 struct SelectCommand {
     TableName tableName;
     bool selectAll{false};
     std::vector<SelectItem> items;
     std::optional<Condition> where;
+};
+
+struct Assignment {
+    std::string columnName;
+    Value value;
+};
+
+struct UpdateCommand {
+    TableName tableName;
+    std::vector<Assignment> assignments;
+    Condition where;
+};
+
+struct DeleteCommand {
+    TableName tableName;
+    Condition where;
 };
 
 using ParsedCommand = std::variant<
@@ -101,5 +128,7 @@ using ParsedCommand = std::variant<
     CreateTableCommand,
     DropTableCommand,
     InsertCommand,
-    SelectCommand
+    SelectCommand,
+    UpdateCommand,
+    DeleteCommand
 >;

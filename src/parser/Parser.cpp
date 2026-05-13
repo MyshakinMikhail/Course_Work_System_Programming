@@ -25,6 +25,10 @@ public:
             command = parseUseDatabase();
         } else if (match(TokenType::Insert)) {
             command = parseInsert();
+        } else if (match(TokenType::Update)) {
+            command = parseUpdate();
+        } else if (match(TokenType::Delete)) {
+            command = parseDelete();
         } else if (match(TokenType::Select)) {
             command = parseSelect();
         } else {
@@ -93,9 +97,37 @@ private:
         expect(TokenType::Value, "expected VALUE after INSERT column list");
 
         do {
-            command.rows.push_back(parseValueList());
+            command.rows.push_back(parseLiteralValueList());
         } while (match(TokenType::Comma));
 
+        return command;
+    }
+
+    ParsedCommand parseUpdate() {
+        UpdateCommand command;
+        command.tableName = parseTableName();
+        expect(TokenType::Set, "expected SET after table name");
+
+        do {
+            Assignment assignment;
+            assignment.columnName = expectIdentifier("expected column name in assignment");
+            expect(TokenType::Equal, "expected '=' in assignment");
+            assignment.value = parseLiteralValue();
+            command.assignments.push_back(std::move(assignment));
+        } while (match(TokenType::Comma));
+
+        expect(TokenType::Where, "expected WHERE after UPDATE assignments");
+        command.where = parseCondition();
+        return command;
+    }
+
+    ParsedCommand parseDelete() {
+        expect(TokenType::From, "expected FROM after DELETE");
+
+        DeleteCommand command;
+        command.tableName = parseTableName();
+        expect(TokenType::Where, "expected WHERE after DELETE table name");
+        command.where = parseCondition();
         return command;
     }
 
@@ -121,7 +153,7 @@ private:
         command.tableName = parseTableName();
 
         if (match(TokenType::Where)) {
-            command.where = parseComparisonCondition();
+            command.where = parseCondition();
         }
 
         return command;
@@ -183,7 +215,7 @@ private:
         return values;
     }
 
-    std::vector<Value> parseValueList() {
+    std::vector<Value> parseLiteralValueList() {
         std::vector<Value> values;
         expect(TokenType::LeftParen, "expected '(' before value list");
 
@@ -210,9 +242,27 @@ private:
         return item;
     }
 
-    Condition parseComparisonCondition() {
+    Condition parseCondition() {
+        const Operand left = parseOperand();
+
+        if (match(TokenType::Between)) {
+            BetweenCondition condition;
+            condition.value = left;
+            condition.lowerBound = parseOperand();
+            expect(TokenType::And, "expected AND in BETWEEN condition");
+            condition.upperBound = parseOperand();
+            return condition;
+        }
+
+        if (match(TokenType::Like)) {
+            LikeCondition condition;
+            condition.value = left;
+            condition.pattern = parseOperand();
+            return condition;
+        }
+
         ComparisonCondition condition;
-        condition.left = parseOperand();
+        condition.left = left;
         condition.op = parseComparisonOperator();
         condition.right = parseOperand();
         return condition;
