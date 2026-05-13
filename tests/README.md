@@ -16,3 +16,13 @@ cmake --build build
 cd build
 ctest --output-on-failure
 ```
+
+## Текущее состояние
+- UPDATE пока заглушка;
+- DELETE пока заглушка;
+- NOT_NULL парсится, но не применяется, потому что в core/storage нет хранения nullable/not-null;
+- NULL парсится, но storage сейчас его не поддерживает;
+- INDEXED сохраняется в схеме, но уникальность и использование индекса зависят от index/core;
+- INSERT сейчас требует значения для всех колонок, потому что нет полноценного NULL;
+- оптимизация через индекс в SELECT WHERE пока не сделана;
+- UPDATE/DELETE физически не реализованы, потому что нижний storage сейчас append-only.
