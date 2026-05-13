@@ -10,4 +10,7 @@ enable_testing()
 
 add_subdirectory(src/storage)
 add_subdirectory(src/core)
+add_subdirectory(src/parser)
+add_subdirectory(src/engine)
+add_subdirectory(src/cli)
 add_subdirectory(tests)
