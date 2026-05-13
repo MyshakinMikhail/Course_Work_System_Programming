@@ -30,4 +30,12 @@ target_link_libraries(parser_ddl_tests PRIVATE parser)
 
 add_test(NAME parser_ddl_tests COMMAND parser_ddl_tests)
 
+add_executable(parser_dml_tests
+    parser_dml_tests.cpp
+)
+
+target_link_libraries(parser_dml_tests PRIVATE parser)
+
+add_test(NAME parser_dml_tests COMMAND parser_dml_tests)
+
 add_subdirectory(core_storage_tests)

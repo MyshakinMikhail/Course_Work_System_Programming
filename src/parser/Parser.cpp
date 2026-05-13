@@ -1,5 +1,7 @@
 #include "Parser.h"
 
+#include <cstdlib>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -21,6 +23,10 @@ public:
             command = parseDrop();
         } else if (match(TokenType::Use)) {
             command = parseUseDatabase();
+        } else if (match(TokenType::Insert)) {
+            command = parseInsert();
+        } else if (match(TokenType::Select)) {
+            command = parseSelect();
         } else {
             throw errorAtCurrent("expected command keyword");
         }
@@ -72,7 +78,53 @@ private:
     }
 
     ParsedCommand parseUseDatabase() {
-        return UseDatabaseCommand{expectIdentifier("expected database name")};
+        UseDatabaseCommand command;
+        command.databaseName = expectIdentifier("expected database name");
+        return command;
+    }
+
+    ParsedCommand parseInsert() {
+        expect(TokenType::Into, "expected INTO after INSERT");
+
+        InsertCommand command;
+        command.tableName = parseTableName();
+        command.columns = parseIdentifierList("expected column name");
+
+        expect(TokenType::Value, "expected VALUE after INSERT column list");
+
+        do {
+            command.rows.push_back(parseValueList());
+        } while (match(TokenType::Comma));
+
+        return command;
+    }
+
+    ParsedCommand parseSelect() {
+        SelectCommand command;
+
+        if (match(TokenType::Star)) {
+            command.selectAll = true;
+        } else {
+            expect(TokenType::LeftParen, "expected '*' or '(' after SELECT");
+            if (check(TokenType::RightParen)) {
+                throw errorAtCurrent("SELECT column list cannot be empty");
+            }
+
+            do {
+                command.items.push_back(parseSelectItem());
+            } while (match(TokenType::Comma));
+
+            expect(TokenType::RightParen, "expected ')' after SELECT column list");
+        }
+
+        expect(TokenType::From, "expected FROM after SELECT list");
+        command.tableName = parseTableName();
+
+        if (match(TokenType::Where)) {
+            command.where = parseComparisonCondition();
+        }
+
+        return command;
     }
 
     TableName parseTableName() {
@@ -113,6 +165,116 @@ private:
         }
 
         return column;
+    }
+
+    std::vector<std::string> parseIdentifierList(const std::string& itemMessage) {
+        std::vector<std::string> values;
+        expect(TokenType::LeftParen, "expected '(' before list");
+
+        if (check(TokenType::RightParen)) {
+            throw errorAtCurrent("list cannot be empty");
+        }
+
+        do {
+            values.push_back(expectIdentifier(itemMessage));
+        } while (match(TokenType::Comma));
+
+        expect(TokenType::RightParen, "expected ')' after list");
+        return values;
+    }
+
+    std::vector<Value> parseValueList() {
+        std::vector<Value> values;
+        expect(TokenType::LeftParen, "expected '(' before value list");
+
+        if (check(TokenType::RightParen)) {
+            throw errorAtCurrent("value list cannot be empty");
+        }
+
+        do {
+            values.push_back(parseLiteralValue());
+        } while (match(TokenType::Comma));
+
+        expect(TokenType::RightParen, "expected ')' after value list");
+        return values;
+    }
+
+    SelectItem parseSelectItem() {
+        SelectItem item;
+        item.columnName = expectIdentifier("expected selected column name");
+
+        if (match(TokenType::As)) {
+            item.alias = expectIdentifier("expected alias after AS");
+        }
+
+        return item;
+    }
+
+    Condition parseComparisonCondition() {
+        ComparisonCondition condition;
+        condition.left = parseOperand();
+        condition.op = parseComparisonOperator();
+        condition.right = parseOperand();
+        return condition;
+    }
+
+    Operand parseOperand() {
+        if (check(TokenType::Identifier)) {
+            return Operand::Column(advance().lexeme);
+        }
+
+        return Operand::Literal(parseLiteralValue());
+    }
+
+    ComparisonOperator parseComparisonOperator() {
+        if (match(TokenType::Equal) || match(TokenType::EqualEqual)) {
+            return ComparisonOperator::Equal;
+        }
+        if (match(TokenType::NotEqual)) {
+            return ComparisonOperator::NotEqual;
+        }
+        if (match(TokenType::Less)) {
+            return ComparisonOperator::Less;
+        }
+        if (match(TokenType::Greater)) {
+            return ComparisonOperator::Greater;
+        }
+        if (match(TokenType::LessEqual)) {
+            return ComparisonOperator::LessEqual;
+        }
+        if (match(TokenType::GreaterEqual)) {
+            return ComparisonOperator::GreaterEqual;
+        }
+
+        throw errorAtCurrent("expected comparison operator");
+    }
+
+    Value parseLiteralValue() {
+        if (match(TokenType::IntegerLiteral)) {
+            return parseInteger(previous());
+        }
+
+        if (match(TokenType::StringLiteral)) {
+            return previous().lexeme;
+        }
+
+        if (match(TokenType::Null)) {
+            return NullValue{};
+        }
+
+        throw errorAtCurrent("expected literal value");
+    }
+
+    int parseInteger(const Token& token) const {
+        char* end = nullptr;
+        const long value = std::strtol(token.lexeme.c_str(), &end, 10);
+        if (end == token.lexeme.c_str() || *end != '\0' ||
+            value < std::numeric_limits<int>::min() ||
+            value > std::numeric_limits<int>::max()) {
+            throw errorAt(token, "integer literal is out of range");
+        }
+
+        return static_cast<int>(value);
     }
 
     bool match(TokenType type) {
