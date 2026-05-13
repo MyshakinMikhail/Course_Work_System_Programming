@@ -1,4 +1,5 @@
 add_library(parser STATIC
+    Parser.cpp
     Tokenizer.cpp
 )
 

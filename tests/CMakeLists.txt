@@ -22,4 +22,12 @@ target_link_libraries(parser_tokenizer_tests PRIVATE parser)
 
 add_test(NAME parser_tokenizer_tests COMMAND parser_tokenizer_tests)
 
+add_executable(parser_ddl_tests
+    parser_ddl_tests.cpp
+)
+
+target_link_libraries(parser_ddl_tests PRIVATE parser)
+
+add_test(NAME parser_ddl_tests COMMAND parser_ddl_tests)
+
 add_subdirectory(core_storage_tests)
