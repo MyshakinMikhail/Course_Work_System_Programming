@@ -1,0 +1,5 @@
+CREATE DATABASE app;
+USE app;
+CREATE TABLE users (id int INDEXED, name string);
+INSERT INTO users (id, name) VALUE (1, "Ann"), (2, "Bob");
+SELECT * FROM users;

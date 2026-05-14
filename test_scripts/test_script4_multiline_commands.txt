@@ -1,0 +1,15 @@
+CREATE DATABASE multiline_demo;
+USE multiline_demo;
+CREATE TABLE students (
+id int INDEXED,
+name string,
+group_name string
+);
+INSERT INTO students (id, name, group_name) VALUE
+(1, "Ivan", "A1"),
+(2, "Maria", "A1"),
+(3, "Petr", "B2");
+SELECT
+(id, name AS student_name, group_name)
+FROM students
+WHERE group_name == "A1";

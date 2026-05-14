@@ -1,14 +1,16 @@
 #include <iostream>
 
+#include "CliApp.h"
+
 int main(int argc, char* argv[]) {
+    CliApp app;
+
     if (argc == 1) {
-        std::cout << "Заглушка: интерактивный режим" << '\n';
-        return 0;
+        return app.runInteractive(std::cin, std::cout, std::cerr);
     }
 
     if (argc == 2) {
-        std::cout << "Заглушка: пакетный режим" << argv[1] << '\n';
-        return 0;
+        return app.runBatch(argv[1], std::cout, std::cerr);
     }
 
     std::cerr << "Usage: ./prog [script.txt]" << '\n';

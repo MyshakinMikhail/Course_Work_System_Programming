@@ -1,0 +1,8 @@
+CREATE DATABASE conditions_demo;
+USE conditions_demo;
+CREATE TABLE products (id int INDEXED, title string, price int);
+INSERT INTO products (id, title, price) VALUE (1, "Book", 500), (2, "Bottle", 250), (3, "Pen", 80), (4, "Backpack", 2500), (5, "Notebook", 300);
+SELECT * FROM products;
+SELECT (title, price) FROM products WHERE price BETWEEN 100 AND 1000;
+SELECT (id, title) FROM products WHERE title LIKE "B.*";
+SELECT (title) FROM products WHERE title BETWEEN "Book" AND "Pen";

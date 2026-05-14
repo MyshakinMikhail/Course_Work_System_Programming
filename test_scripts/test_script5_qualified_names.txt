@@ -1,0 +1,10 @@
+CREATE DATABASE sales_demo;
+CREATE DATABASE archive_demo;
+CREATE TABLE sales_demo.orders (id int INDEXED, customer string, total int);
+INSERT INTO sales_demo.orders (id, customer, total) VALUE (1, "Ann", 1000), (2, "Bob", 1500), (3, "Ann", 2000);
+SELECT * FROM sales_demo.orders;
+SELECT (customer, total) FROM sales_demo.orders WHERE total > 1200;
+USE archive_demo;
+CREATE TABLE old_orders (id int INDEXED, customer string, total int);
+INSERT INTO old_orders (id, customer, total) VALUE (10, "Carl", 700);
+SELECT * FROM old_orders;

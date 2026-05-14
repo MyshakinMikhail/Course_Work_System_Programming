@@ -86,4 +86,20 @@ target_link_libraries(engine_condition_tests PRIVATE engine parser)
 
 add_test(NAME engine_condition_tests COMMAND engine_condition_tests)
 
+add_executable(cli_reader_tests
+    cli_reader_tests.cpp
+)
+
+target_link_libraries(cli_reader_tests PRIVATE cli)
+
+add_test(NAME cli_reader_tests COMMAND cli_reader_tests)
+
+add_executable(cli_app_tests
+    cli_app_tests.cpp
+)
+
+target_link_libraries(cli_app_tests PRIVATE cli)
+
+add_test(NAME cli_app_tests COMMAND cli_app_tests)
+
 add_subdirectory(core_storage_tests)
